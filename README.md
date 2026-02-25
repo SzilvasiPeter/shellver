@@ -1,7 +1,7 @@
 # shellver
 
-![coverage](https://img.shields.io/endpoint?url=https://szilvasipeter.github.io/shellver/coverage/badge.json)
-![crates](https://img.shields.io/crates/v/shellver)
+[![coverage](https://img.shields.io/endpoint?url=https://szilvasipeter.github.io/shellver/coverage/badge.json&format=svg)](https://szilvasipeter.github.io/shellver/coverage/index.html)
+[![crates](https://img.shields.io/crates/v/shellver)](https://crates.io/crates/shellver)
 ![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)
 
 Detect the current shell and its version on Linux by traversing `/proc`.
@@ -54,7 +54,7 @@ fn main() -> std::io::Result<()> {
 
 ## Supported Shells
 
-The supported shell list is exposed via `Shell::supported_shells()`.
+The supported shell list is exposed via `Shell::supported_shells()`, see the [SHELLS](https://docs.rs/shellver/1.0.1/src/shellver/lib.rs.html#11-14) in src.
 
 ## Errors
 
