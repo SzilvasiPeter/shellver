@@ -2,7 +2,7 @@
 
 [![coverage](https://img.shields.io/endpoint?url=https://szilvasipeter.github.io/shellver/coverage/badge.json&format=svg)](https://szilvasipeter.github.io/shellver/coverage/index.html)
 [![crates](https://img.shields.io/crates/v/shellver)](https://crates.io/crates/shellver)
-![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/SzilvasiPeter/shellver/blob/main/Cargo.toml#L19)
 
 Detect the current shell and its version on Linux by traversing `/proc`.
 
