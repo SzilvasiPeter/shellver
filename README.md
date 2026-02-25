@@ -26,7 +26,7 @@ Binary:
 cargo install shellver
 ```
 
-## CLI
+CLI:
 
 ```bash
 shellver
