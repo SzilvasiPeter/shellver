@@ -45,11 +45,13 @@ jobs:
           cargo llvm-cov --all-features --json --output-path target/coverage/coverage.json
 
           pct=$(jq -r '.data[0].totals.lines.percent' target/coverage/coverage.json)
+          pct_i=$(printf '%.0f' "$pct")
           color=yellow
-          if [ "$(printf '%.0f' "$pct")" -ge 90 ]; then color=brightgreen; \
-          elif [ "$(printf '%.0f' "$pct")" -ge 80 ]; then color=green; fi
-          printf '{"schemaVersion":1,"label":"coverage","message":"%.1f%%","color":"%s"}' \
-            "$pct" "$color" > target/coverage/badge.json
+          if [ "$pct_i" -ge 90 ]; then color=brightgreen; \
+          elif [ "$pct_i" -ge 80 ]; then color=green; fi
+
+          jq -n --arg message "$(printf '%.2f%%' "$pct")" --arg color "$color" \
+            '{"schemaVersion":1,"label":"coverage","message":$message,"color":$color}' > target/coverage/badge.json
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-html
