@@ -1,13 +1,23 @@
 #![forbid(unsafe_code)]
+//! Detect the current shell and its version on Linux by traversing `/proc`.
+//!
+//! The primary entry point is [`Shell::detect`], which walks the parent process
+//! chain to find a known shell and optionally extracts its version.
 use regex::Regex;
 use std::fs;
 use std::io;
 use std::process::Command;
 
-const SHELLS: [&str; 9] = [
-    "bash", "sh", "dash", "zsh", "fish", "ksh", "mksh", "tcsh", "csh",
+const SHELLS: [&str; 13] = [
+    "bash", "zsh", "sh", "tcsh", "csh", "ksh", "mksh", "fish", "dash", "nu", "elvish", "xonsh",
+    "pwsh",
 ];
+const SEMVER_PATTERN: &str = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?";
+const MKSH_PATTERN: &str = r"R[0-9]+";
+const ARGS_VERSION: &[&str] = &["--version"];
+const ARGS_MKSH: &[&str] = &["-c", "printf %s \"$KSH_VERSION\""];
 
+/// Information about the detected shell.
 #[derive(Debug)]
 pub struct Shell {
     name: String,
@@ -21,8 +31,8 @@ impl Shell {
     /// known shell is found within the hop limit.
     pub fn detect() -> io::Result<Self> {
         let read_file = |path: &str| -> io::Result<String> { fs::read_to_string(path) };
-        let run_cmd = |name: &str| -> io::Result<Vec<u8>> {
-            Ok(Command::new(name).arg("--version").output()?.stdout)
+        let run_cmd = |name: &str, args: &[&str]| -> io::Result<Vec<u8>> {
+            Ok(Command::new(name).args(args).output()?.stdout)
         };
         Self::detect_with(read_file, run_cmd)
     }
@@ -46,18 +56,26 @@ impl Shell {
     }
 
     #[must_use]
+    /// Returns the detected shell name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
     #[must_use]
+    /// Returns the detected shell version, if available.
     pub fn version(&self) -> Option<String> {
         self.version.clone()
+    }
+
+    /// Returns the list of supported shell names.
+    #[must_use]
+    pub const fn supported_shells() -> &'static [&'static str] {
+        &SHELLS
     }
 }
 
 type ReadFn = fn(&str) -> io::Result<String>;
-type RunFn = fn(&str) -> io::Result<Vec<u8>>;
+type RunFn = fn(&str, &[&str]) -> io::Result<Vec<u8>>;
 
 fn ppid_from_path_with(path: &str, read: ReadFn) -> io::Result<u32> {
     let text = read(path)?;
@@ -84,159 +102,33 @@ fn shell_from_pid_with(path: &str, read: ReadFn) -> io::Result<Option<&'static s
 }
 
 fn shell_version_with(name: &str, run: RunFn) -> io::Result<Option<String>> {
-    let out = run(name)?;
+    let Some(args) = shell_args(name) else {
+        return Ok(None);
+    };
+    let out = run(name, args)?;
     let text = String::from_utf8(out)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "non utf8 bytes"))?;
-    let re = Regex::new(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?").unwrap();
+    let re = Regex::new(version_pattern(name)).unwrap();
     Ok(re.find(&text).map(|m| m.as_str().to_string()))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn run_mock(name: &str) -> io::Result<Vec<u8>> {
-        if name.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "name empty"));
-        }
-        if name == "bad_utf" {
-            return Ok(vec![0xff, 0xfe]);
-        }
-        Ok(name.as_bytes().to_vec())
-    }
-
-    #[expect(clippy::unnecessary_wraps, reason = "Needs for mocking")]
-    fn read_mock(text: &str) -> io::Result<String> {
-        Ok(text.to_string())
-    }
-
-    fn read_mock_err(_path: &str) -> io::Result<String> {
-        Err(io::Error::new(io::ErrorKind::PermissionDenied, "deny"))
-    }
-
-    #[test]
-    fn shell_from_pid_returns_some() {
-        let val = shell_from_pid_with("bash\n", read_mock).unwrap();
-        assert_eq!(val, Some("bash"));
-    }
-
-    #[test]
-    fn shell_from_pid_returns_none() {
-        let val = shell_from_pid_with("unknown\n", read_mock).unwrap();
-        assert_eq!(val, None);
-    }
-
-    #[test]
-    fn ppid_from_path_parse_ok() {
-        let val = ppid_from_path_with("Name:\tbash\nPPid:\t123\n", read_mock).unwrap();
-        assert_eq!(val, 123);
-    }
-
-    #[test]
-    fn ppid_from_path_missing() {
-        let err = ppid_from_path_with("Name:\tbash\n", read_mock).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
-    }
-
-    #[test]
-    fn ppid_from_path_parse_error() {
-        let err = ppid_from_path_with("Name:\tbash\nPPid:\tbad\n", read_mock).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn ppid_from_path_read_error() {
-        let err = ppid_from_path_with("/proc/1/status", read_mock_err).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
-    }
-
-    #[test]
-    fn shell_version_on_invalid_command() {
-        let err = shell_version_with("", run_mock).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
-    }
-
-    #[test]
-    fn shell_version_on_invalid_input() {
-        let err = shell_version_with("bad_utf", run_mock).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn shell_version_returns_none() {
-        let val = shell_version_with("no version here", run_mock).unwrap();
-        assert_eq!(val, None);
-    }
-
-    #[test]
-    fn shell_version_returns_some() {
-        let val = shell_version_with("bash 5.2.0", run_mock).unwrap();
-        assert_eq!(val, Some("5.2.0".to_string()));
-    }
-
-    fn read_detect_ok(path: &str) -> io::Result<String> {
-        match path {
-            "/proc/self/status" => Ok("PPid:\t100\n".to_string()),
-            "/proc/100/comm" => Ok("bash\n".to_string()),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "bad path")),
-        }
-    }
-
-    fn read_detect_not_found(path: &str) -> io::Result<String> {
-        match path {
-            "/proc/self/status" => Ok("PPid:\t100\n".to_string()),
-            "/proc/100/comm" => Ok("unknown\n".to_string()),
-            "/proc/100/status" => Ok("PPid:\t1\n".to_string()),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "bad path")),
-        }
-    }
-
-    fn read_detect_err(path: &str) -> io::Result<String> {
-        match path {
-            "/proc/self/status" => Err(io::Error::new(io::ErrorKind::PermissionDenied, "deny")),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "bad path")),
-        }
-    }
-
-    fn read_detect_run_err(path: &str) -> io::Result<String> {
-        match path {
-            "/proc/self/status" => Ok("PPid:\t100\n".to_string()),
-            "/proc/100/comm" => Ok("bash\n".to_string()),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "bad path")),
-        }
-    }
-
-    #[expect(clippy::unnecessary_wraps, reason = "Needs for mocking")]
-    fn run_detect_ok(_name: &str) -> io::Result<Vec<u8>> {
-        Ok(b"bash 5.2.0".to_vec())
-    }
-
-    fn run_detect_err(_name: &str) -> io::Result<Vec<u8>> {
-        Err(io::Error::new(io::ErrorKind::InvalidInput, "bad cmd"))
-    }
-
-    #[test]
-    fn detect_with_ok() {
-        let shell = Shell::detect_with(read_detect_ok, run_detect_ok).unwrap();
-        assert_eq!(shell.name(), "bash");
-        assert_eq!(shell.version(), Some("5.2.0".to_string()));
-    }
-
-    #[test]
-    fn detect_with_not_found() {
-        let err = Shell::detect_with(read_detect_not_found, run_detect_ok).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
-    }
-
-    #[test]
-    fn detect_with_read_error() {
-        let err = Shell::detect_with(read_detect_err, run_detect_ok).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
-    }
-
-    #[test]
-    fn detect_with_run_error() {
-        let err = Shell::detect_with(read_detect_run_err, run_detect_err).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+fn shell_args(name: &str) -> Option<&'static [&'static str]> {
+    match name {
+        // Dash doesn't have version option or any other argument to get its version.
+        // One way to retrieve the version is using the system package manager.
+        "dash" => None,
+        "mksh" => Some(ARGS_MKSH),
+        _ => Some(ARGS_VERSION),
     }
 }
+
+fn version_pattern(name: &str) -> &'static str {
+    if name == "mksh" {
+        MKSH_PATTERN
+    } else {
+        SEMVER_PATTERN
+    }
+}
+
+#[cfg(test)]
+mod lib_tests;

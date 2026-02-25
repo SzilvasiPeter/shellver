@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/SzilvasiPeter/shellver"
-description = "shellver"
+description = "Detect the current shell and its version on Linux by traversing /proc."
 readme = "README.md"
-keywords = ["give me a keyword"]
-categories = ["give me a category"]
+keywords = ["shell", "linux", "procfs", "version", "detection"]
+categories = ["os::linux-apis", "command-line-interface"]
 
 [dependencies]
 regex = { version = "1.12.3", default-features = false, features = ["std"] }

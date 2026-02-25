@@ -14,6 +14,9 @@ cov:
     cargo llvm-cov --all-features --html --output-dir target/coverage
     cargo llvm-cov report
 
+open:
+    cargo llvm-cov report --open
+
 sec:
     cargo audit
     cargo deny check
