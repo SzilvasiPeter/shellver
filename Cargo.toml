@@ -12,9 +12,6 @@ categories = ["os::linux-apis", "command-line-interface"]
 [dependencies]
 regex = { version = "1.12.3", default-features = false, features = ["std"] }
 
-[features]
-mock-run = []
-
 [lints.rust]
 unsafe_code = "forbid"
 
