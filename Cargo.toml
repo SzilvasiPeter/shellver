@@ -7,10 +7,10 @@ repository = "https://github.com/SzilvasiPeter/shellver"
 description = "Detect the current shell and its version on Linux by traversing /proc."
 readme = "README.md"
 keywords = ["shell", "linux", "procfs", "version", "detection"]
-categories = ["os::linux-apis", "command-line-interface"]
+categories = ["command-line-interface"]
 
 [dependencies]
-regex = { version = "1.12.3", default-features = false, features = ["std"] }
+regex = { version = "1", default-features = false, features = ["std"] }
 
 [lints.rust]
 unsafe_code = "forbid"
